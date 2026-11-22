@@ -1,0 +1,3 @@
+# Contenedor "web" (mapa Leaflet)
+psycopg2-binary==2.9.10   # cliente PostgreSQL: lee enlaces, nodos, sismo y resultados
+folium==0.18.0            # genera el mapa Leaflet (HTML) desde Python; instala branca (escala de colores)

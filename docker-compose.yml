@@ -1,0 +1,76 @@
+name: tarea2-resiliencia
+
+x-db-env: &db-env
+  PGHOST: db
+  PGPORT: "5432"
+  PGUSER: postgres
+  PGPASSWORD: postgres
+  PGDATABASE: resiliencia
+
+services:
+  # 1) Base de datos PostGIS + pgRouting
+  db:
+    build: ./db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: resiliencia
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d resiliencia"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  # 2) Obtiene el GeoJSON del sismo 8.8 (solo descarga si no existe en data/sismo)
+  sismo:
+    build: ./sismo
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    volumes:
+      - ./data/sismo:/data/sismo
+
+  # 3) Carga shapefiles + sismo en la BD, crea topologia (pgr_createTopology),
+  #    clasifica intersecciones y define nodos clave
+  loader:
+    build: ./loader
+    environment: *db-env
+    volumes:
+      - ./data:/data:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      sismo:
+        condition: service_completed_successfully
+
+  # 4) ATTR antes, modelo de falla, main.sql, ATTR despues (Monte Carlo)
+  analysis:
+    build: ./analysis
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      <<: *db-env
+      MC_ITER: "${MC_ITER:-2000}"
+      MC_SEED: "${MC_SEED:-42}"
+    volumes:
+      - ./output:/output
+    depends_on:
+      loader:
+        condition: service_completed_successfully
+
+  # 5) Mapa Leaflet (folium) servido en http://localhost:8080
+  web:
+    build: ./web
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment: *db-env
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    volumes:
+      - ./output:/output
+    depends_on:
+      analysis:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:

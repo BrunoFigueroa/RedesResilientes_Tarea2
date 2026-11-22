@@ -1,0 +1,2 @@
+# Contenedor "analysis" (ATTR, modelo de falla, Monte Carlo)
+psycopg2-binary==2.9.10   # cliente PostgreSQL: lee la topologia y escribe prob_falla / p_falla
